@@ -1,0 +1,148 @@
+#!/bin/bash
+
+if [ -e "$(dirname $0)/common.sh" ]; then
+    source $(dirname $0)/common.sh
+elif [ -e "$(dirname $0)/../common/common.sh" ]; then
+    source $(dirname $0)/../common/common.sh
+fi
+MOUNT_DIR="/mnt"
+
+mount_glusterfs() {
+    local host=$1
+    local glustervolume=$2
+    local mountDir=$3
+    local error
+
+    log_info "mountDir is" ${mountDir}
+
+    if [ "$(ismounted $mountDir)" == 0 ]; then
+        mkdir -p $mountDir
+
+        local cmd="mount -t glusterfs"
+        cmd="$cmd $host:/$glustervolume $mountDir"
+
+        error=`$cmd 2>&1`
+        if [ $? -ne 0 ]; then
+            print_error "Failed $cmd"
+        fi
+    fi
+}
+
+unmount_glusterfs() {
+    local mountDir="$1"
+
+    if [ $(ismounted "$mountDir") == 1 ] ; then
+        error=`umount "$mountDir" 2>&1`
+        if [ $? -ne 0 ]; then
+            print_error "Failed umount $mountDir: $error"
+        fi
+    fi
+
+    if [ ! "$(ls -A $mountDir)" ]; then
+        rm -rf "$mountDir"
+    fi
+}
+
+init() {
+#    local host="$GLUSTER_SERVER"
+#    local glustervolume="$GLUSTER_VOLUME_NAME"
+#    local opts="$MOUNT_OPTS"
+#    local mountDir="$MOUNT_DIR"
+#    mount_glusterfs "$host" "$glustervolume" "$mountDir" "$opts"
+    print_success
+}
+
+tmp_dir() {
+    echo "/tmp/$(cat /dev/urandom | tr -dc 'a-z0-9' | fold -w5 | head -n1)"
+}
+
+################################################################################
+# These functions are called by the volume plugin framework (or Rancher)
+################################################################################
+
+create() {
+    if [ -z "${OPTS[name]}" ]; then
+        print_error "name is required"
+    fi
+
+    # default configuration
+    local host="$GLUSTER_SERVER"
+    local glustervolume="$GLUSTER_VOLUME_NAME"
+    local opts="$MOUNT_OPTS"
+    local name="${OPTS[name]}"
+    local mountDir="$(tmp_dir)"
+
+    # create sub-directory using name parameter to represent volume
+    mount_glusterfs "$host" "$glustervolume" "$mountDir" "$opts"
+    local subDir="$mountDir/$name"
+    local created=0
+    if [ ! -d "${subDir}" ]; then
+        mkdir -p "${subDir}"
+        created=1
+    fi
+    unmount_glusterfs "${mountDir}"
+
+    if [ "${created}" == 1 ]; then
+        print_options created true name ${OPTS[name]}
+    else
+        print_success
+    fi
+}
+
+attach() {
+    print_not_supported
+}
+
+mountdest() {
+    # default configuration
+    local host="$GLUSTER_SERVER"
+    local glustervolume="$GLUSTER_VOLUME_NAME"
+    local opts="$MOUNT_OPTS"
+    local name="${OPTS[name]}"
+    local mountDir="$MNT_DEST"
+
+    mount_glusterfs "$host" "$glustervolume" "$MOUNT_DIR" "$opts"
+    cmd="mount --bind ${MOUNT_DIR}/${name} ${mountDir}"
+    error=`$cmd 2>&1`
+    if [ $? -ne 0 ]; then
+        print_error "Failed ${cmd}: $error"
+    fi
+    print_success
+}
+
+detach() {
+    print_not_supported
+}
+
+unmount() {
+    local mountDir="$1"
+
+    if [ $(ismounted "$mountDir") == 1 ] ; then
+        error=`umount "$mountDir" 2>&1`
+        if [ $? -ne 0 ]; then
+            print_error "Failed umount $mountDir: $error"
+        fi
+    fi
+
+    if [ ! "$(ls -A $mountDir)" ]; then
+        rm -rf "$mountDir"
+    fi
+    print_success
+}
+
+delete() {
+    # default configuration
+    local host="$GLUSTER_SERVER"
+    local glustervolume="$GLUSTER_VOLUME_NAME"
+    local name="${OPTS[name]}"
+    local mountDir="$(tmp_dir)"
+
+    mount_glusterfs "$host" "$glustervolume" "$mountDir"
+    log_info $name "Purging volume (subfolder)"
+    rm -rf "$mountDir/$name"
+    unmount_glusterfs "${mountDir}"
+
+    print_success purged
+}
+
+main "$@"

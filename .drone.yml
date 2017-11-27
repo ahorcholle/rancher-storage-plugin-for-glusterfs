@@ -7,3 +7,17 @@ pipeline:
     - /var/run/docker.sock:/var/run/docker.sock
     commands:
     - dapper ci
+      
+  changetag:
+    privileged: true
+    image: docker:17.06
+    volumes:
+    - /var/run/docker.sock:/var/run/docker.sock
+    secrets: [ docker_user, docker_password ]
+    commands:
+    - apk update
+    - apk add git
+    - source scripts/version
+    - docker tag rancher/storage-glusterfs:$IMAGE_VERSION uesyn/storage-glusterfs:$IMAGE_VERSION
+    - docker login -u $DOCKER_USER -p $DOCKER_PASSWORD
+    - docker push uesyn/storage-glusterfs:$IMAGE_VERSION

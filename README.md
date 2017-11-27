@@ -1,7 +1,7 @@
-Rancher Storage
+Rancher Storage for glusterfs
 ==============
 
-This repo contains Rancher specific storage plugins
+This repo contains Rancher glusterfs storage plugins
 
 ## Building
 
@@ -11,6 +11,10 @@ This repo contains Rancher specific storage plugins
 ## Running
 
 Add this repo as a catalog in Rancher to run the local builds
+
+## TODO
+
+- [ ] How to use
 
 ## License
 Copyright (c) 2014-2016 [Rancher Labs, Inc.](http://rancher.com)
